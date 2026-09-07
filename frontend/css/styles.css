@@ -1,0 +1,29 @@
+button,input,textarea,select{font:inherit}
+button{cursor:pointer}
+.secondary{background:#e8f1eb;color:#2d5d49}
+.panel{border:1px solid #e2e8f0;border-radius:1rem;background:#fff;padding:1.25rem;box-shadow:0 8px 24px rgba(36,48,43,.05)}
+.hidden{display:none}
+.week-grid{display:grid;grid-template-columns:1fr;gap:.75rem;padding-bottom:.5rem}
+.day{min-height:280px;border:1px solid #e2e8f0;border-radius:1rem;background:#fff;padding:1rem;box-shadow:0 8px 24px rgba(36,48,43,.05)}
+.day h2{margin:0 0 1rem;font-size:.95rem;font-weight:800;color:#24302b}
+.slot{min-height:92px;border-top:1px solid #edf1ef;padding:.85rem 0}
+.slot-title{font-size:.7rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#829087}
+.meal{display:flex;gap:.4rem;margin-top:.5rem}
+.meal input{min-width:0;flex:1;border:1px solid #dce4de;border-radius:.6rem;background:#f8faf9;padding:.55rem;outline:none}
+.planner-ingredients{margin-top:.7rem;border-radius:.7rem;background:#f8faf9;padding:.65rem}.planner-ingredients summary{cursor:pointer;list-style:none;font-size:.75rem;font-weight:800;color:#52625a}.planner-ingredients summary::-webkit-details-marker{display:none}.planner-ingredients summary::before{content:'▸';display:inline-block;margin-right:.35rem;transition:transform .15s ease}.planner-ingredients[open] summary::before{transform:rotate(90deg)}.planner-ingredients summary span{margin-left:.25rem;color:#829087;font-weight:600}.planner-ingredient-list{margin-top:.4rem}.planner-ingredients label{display:flex;align-items:center;gap:.5rem;margin:.3rem 0;font-size:.8rem;font-weight:500}.planner-ingredients input{accent-color:#39735b}.planner-ingredients small{color:#829087}
+.meal select:focus,input:focus,textarea:focus{border-color:#78a68e;box-shadow:0 0 0 3px #e4f0e7}
+.actions{display:flex;flex-wrap:wrap;gap:.65rem;margin-top:1.25rem}
+.actions button,form button[type=submit]{border:0;border-radius:.75rem;background:#39735b;color:#fff;padding:.7rem 1rem;font-weight:700}
+label{display:grid;gap:.35rem;margin-bottom:1rem;color:#52625a;font-size:.9rem;font-weight:700}
+label input,label textarea{width:100%;border:1px solid #dce4de;border-radius:.6rem;background:#fff;padding:.65rem;font-weight:400}
+.form-heading{display:flex;align-items:center;justify-content:space-between;margin:.25rem 0 .75rem}
+.ingredient-row{display:grid;grid-template-columns:2fr 1fr 1fr auto;gap:.5rem;margin-bottom:.5rem}
+.ingredient-row input,.shopping-row input:not([type=checkbox]){min-width:0;border:1px solid #dce4de;border-radius:.6rem;padding:.55rem}
+.small{border:0;border-radius:.6rem;padding:.5rem .7rem;font-size:.85rem;font-weight:700}
+.remove{border:0;border-radius:.5rem;background:#fce8e8;color:#a03f3f}
+.card-list{display:grid;gap:.75rem}
+.recipe-card{display:flex;justify-content:space-between;gap:1rem;border:1px solid #e2e8f0;border-radius:1rem;background:#fff;padding:1.1rem;box-shadow:0 8px 24px rgba(36,48,43,.05)}
+.recipe-card h2{margin:0 0 .25rem;font-size:1.05rem;font-weight:800}.recipe-card p{margin:0 0 .6rem;color:#748078}.recipe-card small{color:#64746b}.recipe-actions{display:flex;align-items:flex-start;gap:.5rem}
+.shopping-row{display:grid;grid-template-columns:auto 1fr 1fr auto;align-items:center;gap:.6rem;border-bottom:1px solid #edf1ef;padding:.7rem 0}.shopping-row input[type=checkbox]{width:1.1rem;height:1.1rem;accent-color:#39735b}.shopping-row.checked input:not([type=checkbox]){color:#93a098;text-decoration:line-through}
+.meal[draggable=true]{cursor:grab}.meal[draggable=true]:active{cursor:grabbing}.drag-handle{color:#39735b;font-size:1.25rem;font-weight:900;line-height:1;user-select:none}.drag-hint{color:#829087;font-size:.7rem;font-weight:700;white-space:nowrap}.slot.dragging{opacity:.45}.slot.drag-over{border-color:#78a68e;background:#f3f8f4;box-shadow:0 0 0 3px #e4f0e7}.remove-recipe{border:0;border-radius:.6rem;background:#fce8e8;color:#a03f3f;padding:.5rem .7rem;font-size:.85rem;font-weight:700}
+@media(max-width:640px){.recipe-card{flex-direction:column}.ingredient-row{grid-template-columns:1fr 1fr 1fr auto}.shopping-row{grid-template-columns:auto 1fr auto}.shopping-row .s-qty{grid-column:2}.shopping-row .remove{grid-column:3;grid-row:1 / span 2}}
