@@ -1,0 +1,11 @@
+services:
+  meal-planner:
+    build: .
+    ports:
+      - "${PORT:-9009}:9009"
+    environment:
+      DATABASE_URL: sqlite:////data/meal_planner.db
+    volumes:
+      - meal_planner_data:/data
+volumes:
+  meal_planner_data:
