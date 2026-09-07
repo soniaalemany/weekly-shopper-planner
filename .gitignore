@@ -1,0 +1,24 @@
+# Local configuration and session material
+.env
+.env.*
+SESSION_CONTEXT.md
+.copilot/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Local application data
+*.db
+*.sqlite
+*.sqlite3
+
+# Dependency manifests are kept local and are not published
+requirements.txt
+backend/requirements.txt
+
+# OS/editor files
+.DS_Store
+.vscode/
