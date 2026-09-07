@@ -4,6 +4,13 @@ Aplicación web para organizar menús semanales, guardar recetas y generar lista
 de la compra. El backend está construido con FastAPI, SQLAlchemy y SQLite; la
 interfaz usa HTML, CSS y JavaScript sin framework.
 
+El proyecto está inspirado en
+[lista_de_la_compra](https://github.com/jaimegonzalezfabregas/lista_de_la_compra).
+La importación de archivos JSON permite migrar a esta aplicación los datos
+exportados desde esa aplicación original.
+
+Todo el código de este proyecto ha sido generado con GitHub Copilot.
+
 ## Funcionalidades
 
 - Crear, editar y eliminar recetas con sus ingredientes.
@@ -69,13 +76,13 @@ La documentación interactiva está disponible en:
 
 La comprobación de salud responde en `GET /api/health`.
 
-## Importar datos
+## Migrar datos desde lista_de_la_compra
 
-En **Recetas**, selecciona un JSON exportado por la aplicación anterior y pulsa
-**Cargar datos**. Se importan las recetas activas, sus ingredientes, las
-semanas del planificador y el historial de uso. Las semanas se normalizan al
-lunes correspondiente y volver a cargar el mismo archivo no duplica planes ni
-usos.
+En **Recetas**, selecciona el JSON exportado desde
+**lista_de_la_compra** y pulsa **Cargar datos**. Se importan las recetas
+activas, sus ingredientes, las semanas del planificador y el historial de uso.
+Las semanas se normalizan al lunes correspondiente y volver a cargar el mismo
+archivo no duplica planes ni usos.
 
 ## Estructura
 
@@ -85,7 +92,3 @@ frontend/   páginas y recursos estáticos de la interfaz
 Dockerfile  imagen de producción
 docker-compose.yml
 ```
-
-## Licencia
-
-No se ha definido todavía una licencia para este proyecto.
