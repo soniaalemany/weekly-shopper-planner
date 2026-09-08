@@ -47,18 +47,6 @@ function shiftWeek(amount) {
   $('week-picker').value = weekInputValue(state.week);
   loadPlan();
 }
-function renderSavedWeeks(plans) {
-  const select = $('saved-weeks');
-  const current = state.week;
-  select.replaceChildren(new Option('Semanas con menú', ''));
-  plans.forEach((plan) => {
-    const label = new Date(`${plan.monday}T00:00:00`).toLocaleDateString('es-ES', {
-      day: '2-digit', month: '2-digit', year: 'numeric',
-    });
-    select.add(new Option(`Semana del ${label}`, plan.monday));
-  });
-  select.value = plans.some((plan) => plan.monday === current) ? current : '';
-}
 async function request(url, options = {}) {
   const response = await fetch(api + url, {
     headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
@@ -71,12 +59,31 @@ async function request(url, options = {}) {
 function ingredientChecklist(recipe, day, meal, position) {
   const ingredients = recipe?.ingredients || [];
   if (!recipe || !ingredients.length) return '';
-  return `<div class="planner-ingredients"><button type="button" class="ingredient-list-toggle" aria-expanded="false" aria-label="Mostrar ingredientes para la compra" title="Mostrar ingredientes para la compra">☷</button><div class="planner-ingredient-list hidden">${ingredients.map((ingredient, index) => {
+  return `<div class="planner-ingredients"><div class="planner-ingredient-list hidden">${ingredients.map((ingredient, index) => {
     const key = ingredientKey(recipe.id, index, day, meal, position);
     const details = [ingredient.quantity, ingredient.unit].filter(Boolean).join(' ');
     const checked = state.selectedIngredients.has(shoppingIngredientKey(ingredient.name, ingredient.unit));
     return `<label><span>${escapeHtml(ingredient.name)}${details ? ` <small>(${escapeHtml(details)})</small>` : ''}</span><input type="checkbox" data-ingredient-key="${key}" data-recipe-id="${recipe.id}" data-ingredient-index="${index}" data-day="${day}" data-meal="${meal}" ${checked ? 'checked' : ''}></label>`;
   }).join('')}</div></div>`;
+}
+
+function addIngredientToggle(slot, recipe) {
+  slot.querySelector('.ingredient-list-toggle')?.remove();
+  if (!recipe?.ingredients?.length) return;
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'ingredient-list-toggle';
+  button.setAttribute('aria-expanded', 'false');
+  button.setAttribute('aria-label', 'Mostrar ingredientes para la compra');
+  button.title = 'Mostrar ingredientes para la compra';
+  button.textContent = '☷';
+  slot.querySelector('.recipe-input-wrap').append(button);
+  button.addEventListener('click', () => {
+    const list = slot.querySelector('.planner-ingredient-list');
+    const expanded = button.getAttribute('aria-expanded') === 'true';
+    button.setAttribute('aria-expanded', String(!expanded));
+    list.classList.toggle('hidden', expanded);
+  });
 }
 
 function setSlotRecipe(slot, value) {
@@ -290,13 +297,7 @@ function render() {
       const input = slot.querySelector('.recipe-input');
       const recipe = state.recipes.find((item) => item.id === current?.recipe_id);
       slot.insertAdjacentHTML('beforeend', ingredientChecklist(recipe, day, meal, position));
-      slot.querySelector('.ingredient-list-toggle')?.addEventListener('click', (event) => {
-        const button = event.currentTarget;
-        const list = slot.querySelector('.planner-ingredient-list');
-        const expanded = button.getAttribute('aria-expanded') === 'true';
-        button.setAttribute('aria-expanded', String(!expanded));
-        list.classList.toggle('hidden', expanded);
-      });
+      addIngredientToggle(slot, recipe);
       if (position === 0 && !optionalEntry) addOptionalButton(slot);
       input.addEventListener('input', () => showAutocomplete(slot));
       input.addEventListener('focus', () => showAutocomplete(slot));
@@ -389,6 +390,7 @@ function updateSlot(slot, createNew = false) {
   }
   slot.querySelector('.planner-ingredients')?.remove();
   slot.insertAdjacentHTML('beforeend', ingredientChecklist(recipe, +slot.dataset.day, slot.dataset.meal, +slot.dataset.position));
+  addIngredientToggle(slot, recipe);
   ensureRecipeControls(slot);
 }
 
@@ -485,7 +487,6 @@ async function loadPlan() {
   try { state.plan = await request(`/meal-plans/${state.week}`); }
   catch (error) { state.plan = { entries: [] }; if (!error.message.includes('404')) $('plan-status').textContent = 'No se pudo cargar la semana.'; }
   await loadShoppingItems();
-  $('saved-weeks').value = state.week;
   render();
 }
 async function loadShoppingItems() {
@@ -502,10 +503,6 @@ async function load() {
     state.recipes = await request('/recipes');
   }
   catch (error) { $('plan-status').textContent = 'No se pudieron cargar las recetas.'; }
-  try {
-    renderSavedWeeks(await request('/meal-plans'));
-  }
-  catch (error) { $('plan-status').textContent = 'No se pudieron cargar las semanas guardadas.'; }
   await loadPlan();
 }
 
@@ -513,11 +510,4 @@ $('week-picker').value = weekInputValue(state.week);
 $('week-picker').addEventListener('change', (event) => { state.week = mondayFromWeekInput(event.target.value); event.target.value = weekInputValue(state.week); loadPlan(); });
 $('previous-week').onclick = () => shiftWeek(-1);
 $('next-week').onclick = () => shiftWeek(1);
-$('saved-weeks').addEventListener('change', (event) => {
-  if (!event.target.value) return;
-  state.week = event.target.value;
-  $('week-picker').value = weekInputValue(state.week);
-  loadPlan();
-});
-
 load().catch(() => { $('plan-status').textContent = 'No se pudo conectar con el servidor.'; });

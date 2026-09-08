@@ -14,7 +14,9 @@ Todo el código de este proyecto ha sido generado con GitHub Copilot.
 ## Funcionalidades
 
 - Crear, editar y eliminar recetas con sus ingredientes.
+- Buscar recetas con autocompletado en la biblioteca.
 - Planificar recetas por día, tipo de comida y posición.
+- Seleccionar cualquier semana directamente desde el calendario del planificador.
 - Consultar las semanas guardadas.
 - Generar una lista de la compra a partir del menú semanal.
 - Importar un catálogo y su histórico desde un archivo JSON en la sección
