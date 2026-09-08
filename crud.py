@@ -2,7 +2,7 @@ from collections import defaultdict
 from datetime import date
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session, selectinload
-from .models import *
+from models import *
 
 def recipe_query():
     return select(Recipe).options(selectinload(Recipe.ingredients))
@@ -42,9 +42,13 @@ def save_plan(db, data):
     else: plan.entries.clear(); db.flush()
     db.execute(delete(UsageHistory).where(UsageHistory.monday == data.monday))
     used_recipes = set()
+    grouped_entries = defaultdict(list)
     for entry in data.entries:
-        plan.entries.append(MealPlanEntry(day_of_week=entry.day_of_week, meal_type=entry.meal_type, position=entry.position, recipe_id=entry.recipe_id, servings=entry.servings))
-        used_recipes.add(entry.recipe_id)
+        grouped_entries[(entry.day_of_week, entry.meal_type)].append(entry)
+    for (day_of_week, meal_type), entries in grouped_entries.items():
+        for position, entry in enumerate(sorted(entries, key=lambda item: item.position)):
+            plan.entries.append(MealPlanEntry(day_of_week=day_of_week, meal_type=meal_type, position=position, recipe_id=entry.recipe_id, servings=entry.servings))
+            used_recipes.add(entry.recipe_id)
     for recipe_id in used_recipes:
         db.add(UsageHistory(recipe_id=recipe_id, monday=data.monday))
     db.commit(); return get_plan(db, data.monday)

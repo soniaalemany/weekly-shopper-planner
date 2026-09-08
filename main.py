@@ -3,14 +3,14 @@ from datetime import date
 from pathlib import Path
 from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
-from .crud import *
-from .database import Base, engine, get_db, migrate_meal_plan_entries
-from .models import Recipe as RecipeModel, ShoppingList as ShoppingListModel, ShoppingListItem as ShoppingListItemModel, UsageHistory as UsageHistoryModel
-from .importer import import_external_data
-from .schemas import *
+from crud import *
+from database import Base, engine, get_db, migrate_meal_plan_entries
+from models import Recipe as RecipeModel, ShoppingList as ShoppingListModel, ShoppingListItem as ShoppingListItemModel, UsageHistory as UsageHistoryModel
+from importer import import_external_data
+from schemas import *
 
 Base.metadata.create_all(bind=engine)
 migrate_meal_plan_entries()
@@ -136,8 +136,24 @@ def record_usage(data: UsageCreate, db: Session = Depends(get_db)):
     value = UsageHistoryModel(**data.model_dump()); db.add(value); db.commit(); db.refresh(value)
     return db.scalar(select(UsageHistoryModel).options(selectinload(UsageHistoryModel.recipe).selectinload(RecipeModel.ingredients)).where(UsageHistoryModel.id == value.id))
 
-# Optional static mount keeps the API usable in deployments without the frontend.
-frontend_dir = Path(os.getenv("FRONTEND_DIR", Path(__file__).resolve().parent.parent / "frontend"))
+# Serve only the frontend assets; the project root also contains backend source files.
+frontend_dir = Path(os.getenv("FRONTEND_DIR", Path(__file__).resolve().parent))
 if frontend_dir.is_dir():
-    app.mount("/static", StaticFiles(directory=str(frontend_dir), html=True), name="static-frontend")
-    app.mount("/", StaticFiles(directory=str(frontend_dir), html=True), name="frontend")
+    @app.get("/", include_in_schema=False)
+    def index():
+        return FileResponse(frontend_dir / "index.html")
+
+    @app.get("/recipes.html", include_in_schema=False)
+    def recipes_page():
+        return FileResponse(frontend_dir / "recipes.html")
+
+    @app.get("/shopping.html", include_in_schema=False)
+    def shopping_page():
+        return FileResponse(frontend_dir / "shopping.html")
+
+    @app.get("/{asset_name}", include_in_schema=False)
+    def frontend_asset(asset_name: str):
+        allowed_assets = {"styles.css", "app.js", "recipes.js", "shopping.js"}
+        if asset_name not in allowed_assets:
+            raise HTTPException(404, "Asset not found")
+        return FileResponse(frontend_dir / asset_name)

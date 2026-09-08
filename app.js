@@ -3,27 +3,17 @@ const state = { week: monday(new Date()), plan: { entries: [] }, recipes: [], se
 const $ = (id) => document.getElementById(id);
 
 function iso(date) { return date.toISOString().slice(0, 10); }
-function weekInputValue(value) {
+function mondayFromDateInput(value) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return state.week;
   const date = new Date(`${value}T00:00:00Z`);
-  const thursday = new Date(date);
-  thursday.setUTCDate(date.getUTCDate() + (4 - (date.getUTCDay() || 7)));
-  const yearStart = new Date(Date.UTC(thursday.getUTCFullYear(), 0, 1));
-  const week = Math.ceil((((thursday - yearStart) / 86400000) + 1) / 7);
-  return `${thursday.getUTCFullYear()}-W${String(week).padStart(2, '0')}`;
-}
-function mondayFromWeekInput(value) {
-  const match = /^(\d{4})-W(\d{2})$/.exec(value);
-  if (!match) return state.week;
-  const year = Number(match[1]);
-  const week = Number(match[2]);
-  const januaryFourth = new Date(Date.UTC(year, 0, 4));
-  const monday = new Date(januaryFourth);
-  monday.setUTCDate(januaryFourth.getUTCDate() - (januaryFourth.getUTCDay() || 7) + 1 + ((week - 1) * 7));
-  return iso(monday);
+  date.setUTCDate(date.getUTCDate() - ((date.getUTCDay() + 6) % 7));
+  return iso(date);
 }
 function monday(value) {
-  const date = new Date(value);
-  date.setDate(date.getDate() - ((date.getDay() + 6) % 7));
+  const date = value instanceof Date
+    ? new Date(Date.UTC(value.getFullYear(), value.getMonth(), value.getDate()))
+    : new Date(`${value}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() - ((date.getUTCDay() + 6) % 7));
   return iso(date);
 }
 function recipeFor(value) {
@@ -41,10 +31,10 @@ function escapeHtml(value) {
   return String(value).replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[character]));
 }
 function shiftWeek(amount) {
-  const date = new Date(`${state.week}T00:00:00`);
-  date.setDate(date.getDate() + amount * 7);
+  const date = new Date(`${state.week}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + amount * 7);
   state.week = iso(date);
-  $('week-picker').value = weekInputValue(state.week);
+  $('week-picker').value = state.week;
   loadPlan();
 }
 async function request(url, options = {}) {
@@ -145,6 +135,22 @@ function moveRecipe(source, target) {
   scheduleSave();
 }
 
+function mealSlot(day, meal, position) {
+  return [...document.querySelectorAll('.slot')].find((candidate) => (
+    candidate.dataset.day === day &&
+    candidate.dataset.meal === meal &&
+    candidate.dataset.position === String(position)
+  ));
+}
+
+function clearSlotControls(slot) {
+  slot.querySelector('.remove-recipe')?.remove();
+  slot.querySelector('.drag-handle')?.remove();
+  slot.querySelector('.drag-hint')?.remove();
+  slot.querySelector('.meal').draggable = false;
+  slot.querySelector('.planner-ingredients')?.remove();
+}
+
 function syncOptionalSlot(slot) {
   const position = +slot.dataset.position;
   const meal = slot.dataset.meal;
@@ -152,24 +158,30 @@ function syncOptionalSlot(slot) {
   const recipe = recipeFor(slot.querySelector('.recipe-input').value);
   if (position === 0 && !recipe) {
     slot.querySelector('.add-optional')?.remove();
-    slot.querySelector('.remove-recipe')?.remove();
-    slot.querySelector('.drag-handle')?.remove();
-    slot.querySelector('.drag-hint')?.remove();
-    slot.querySelector('.meal').draggable = false;
-    const optionalSlot = [...document.querySelectorAll('.slot')].find((candidate) => (
-      candidate.dataset.day === day && candidate.dataset.meal === meal && candidate.dataset.position === '1'
-    ));
+    const optionalSlot = mealSlot(day, meal, 1);
+    const optionalRecipe = optionalSlot && recipeFor(optionalSlot.querySelector('.recipe-input').value);
+    if (optionalSlot && optionalRecipe) {
+      slot.querySelector('.recipe-input').value = optionalSlot.querySelector('.recipe-input').value;
+      optionalSlot.querySelector('.recipe-input').value = '';
+      clearSlotControls(optionalSlot);
+      optionalSlot.classList.add('hidden');
+      updateSlot(slot);
+      addOptionalButton(slot);
+      return;
+    }
+    clearSlotControls(slot);
     optionalSlot?.classList.add('hidden');
-    if (optionalSlot) optionalSlot.querySelector('.recipe-input').value = '';
+    if (optionalSlot) {
+      optionalSlot.querySelector('.recipe-input').value = '';
+      clearSlotControls(optionalSlot);
+    }
     return;
   }
   if (position === 1 && !recipe) {
     slot.classList.add('hidden');
     slot.querySelector('.recipe-input').value = '';
-    slot.querySelector('.planner-ingredients')?.remove();
-    const primarySlot = [...document.querySelectorAll('.slot')].find((candidate) => (
-      candidate.dataset.day === day && candidate.dataset.meal === meal && candidate.dataset.position === '0'
-    ));
+    clearSlotControls(slot);
+    const primarySlot = mealSlot(day, meal, 0);
     primarySlot?.querySelector('.add-optional')?.remove();
     addOptionalButton(primarySlot);
   }
@@ -271,22 +283,33 @@ function enableTouchDragging(slot) {
 
 function render() {
   const grid = $('week-grid');
-  const entries = state.plan?.entries || [];
+  const entries = [...(state.plan?.entries || [])];
+  entries.forEach((entry) => {
+    if ((entry.position || 0) !== 1) return;
+    const hasPrimary = entries.some((candidate) => (
+      candidate.day_of_week === entry.day_of_week &&
+      candidate.meal_type === entry.meal_type &&
+      (candidate.position || 0) === 0
+    ));
+    if (!hasPrimary) entry.position = 0;
+  });
+  const normalizedEntries = entries;
+  if (state.plan) state.plan.entries = normalizedEntries;
   const days = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
-  const weekStart = new Date(`${state.week}T00:00:00`);
+  const weekStart = new Date(`${state.week}T00:00:00Z`);
   grid.replaceChildren();
 
   days.forEach((name, day) => {
     const currentDate = new Date(weekStart);
-    currentDate.setDate(currentDate.getDate() + day);
+    currentDate.setUTCDate(currentDate.getUTCDate() + day);
     const card = document.createElement('article');
     card.className = 'day';
-    card.innerHTML = `<h2>${name}<br><span class="text-xs font-medium text-slate-400">${currentDate.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit' })}</span></h2>`;
+    card.innerHTML = `<h2>${name}<br><span class="text-xs font-medium text-slate-400">${currentDate.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', timeZone: 'UTC' })}</span></h2>`;
 
     ['comida', 'cena'].forEach((meal) => {
       [0, 1].forEach((position) => {
-      const current = entries.find((entry) => entry.day_of_week === day && entry.meal_type === meal && (entry.position || 0) === position);
-      const optionalEntry = position === 0 && entries.some((entry) => entry.day_of_week === day && entry.meal_type === meal && (entry.position || 0) === 1);
+      const current = normalizedEntries.find((entry) => entry.day_of_week === day && entry.meal_type === meal && (entry.position || 0) === position);
+      const optionalEntry = position === 0 && normalizedEntries.some((entry) => entry.day_of_week === day && entry.meal_type === meal && (entry.position || 0) === 1);
       const slot = document.createElement('div');
       slot.className = `slot${position === 1 && !current ? ' optional-slot hidden' : ''}`;
       slot.dataset.day = day;
@@ -506,8 +529,8 @@ async function load() {
   await loadPlan();
 }
 
-$('week-picker').value = weekInputValue(state.week);
-$('week-picker').addEventListener('change', (event) => { state.week = mondayFromWeekInput(event.target.value); event.target.value = weekInputValue(state.week); loadPlan(); });
+$('week-picker').value = state.week;
+$('week-picker').addEventListener('change', (event) => { if (!event.target.value) return; state.week = mondayFromDateInput(event.target.value); event.target.value = state.week; loadPlan(); });
 $('previous-week').onclick = () => shiftWeek(-1);
 $('next-week').onclick = () => shiftWeek(1);
 load().catch(() => { $('plan-status').textContent = 'No se pudo conectar con el servidor.'; });

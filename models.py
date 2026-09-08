@@ -1,7 +1,7 @@
 from datetime import date, datetime
 from sqlalchemy import Date, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from .database import Base
+from database import Base
 
 class Recipe(Base):
     __tablename__ = "recipes"

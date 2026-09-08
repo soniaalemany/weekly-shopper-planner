@@ -3,7 +3,7 @@ from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
-from .models import MealPlanEntry, Recipe, RecipeIngredient, UsageHistory, WeeklyMealPlan
+from models import MealPlanEntry, Recipe, RecipeIngredient, UsageHistory, WeeklyMealPlan
 
 
 WEEK_INDEX_EPOCH = date(1970, 1, 5)

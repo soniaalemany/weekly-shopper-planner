@@ -43,7 +43,7 @@ python -m venv .venv
 . .venv/bin/activate
 python -m pip install "fastapi>=0.110,<1.0" "uvicorn[standard]>=0.29,<1.0" \
   "SQLAlchemy>=2.0,<3.0" "pydantic>=2.0,<3.0"
-uvicorn backend.main:app --host 127.0.0.1 --port 9009 --reload
+uvicorn main:app --host 127.0.0.1 --port 9009 --reload
 ```
 
 Abre <http://localhost:9009>. La base de datos local se crea como
@@ -88,9 +88,6 @@ archivo no duplica planes ni usos.
 
 ## Estructura
 
-```text
-backend/    API FastAPI, modelos, persistencia e importador
-frontend/   páginas y recursos estáticos de la interfaz
-Dockerfile  imagen de producción
-docker-compose.yml
-```
+Todos los archivos del proyecto se mantienen en el directorio raíz. Los nombres
+que chocaban conservan su procedencia: `requirements.txt` contiene el manifiesto
+general y `backend-requirements.txt` el del backend.

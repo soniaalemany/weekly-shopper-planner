@@ -17,7 +17,7 @@ venv/
 
 # Dependency manifests are kept local and are not published
 requirements.txt
-backend/requirements.txt
+backend-requirements.txt
 
 # OS/editor files
 .DS_Store
