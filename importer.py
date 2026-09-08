@@ -1,4 +1,5 @@
 from datetime import date, datetime, time, timedelta
+import re
 from typing import Any
 
 from sqlalchemy import select
@@ -7,6 +8,71 @@ from models import MealPlanEntry, Recipe, RecipeIngredient, UsageHistory, Weekly
 
 
 WEEK_INDEX_EPOCH = date(1970, 1, 5)
+
+_QUANTITY_RE = re.compile(
+    r"(?P<quantity>\d+(?:[.,]\d+)?)(?:\s*[-–]\s*\d+(?:[.,]\d+)?)?"
+    r"(?:\s*(?P<unit>[^\d,.;()]+?))?(?=\s*(?:\(|$|,|;))",
+    re.IGNORECASE,
+)
+
+
+def parse_markdown_recipes(content: str) -> list[dict[str, Any]]:
+    """Parse recipes formatted as `## Name` followed by `- Ingredient: amount`."""
+    parsed: list[dict[str, Any]] = []
+    current: dict[str, Any] | None = None
+    for raw_line in content.splitlines():
+        line = raw_line.strip()
+        heading = re.match(r"^##\s+(.+?)\s*$", line)
+        if heading:
+            current = {"name": heading.group(1).strip(), "ingredients": []}
+            parsed.append(current)
+            continue
+        if current is None or not line.startswith("-"):
+            continue
+        ingredient_line = line[1:].strip()
+        if ":" not in ingredient_line:
+            continue
+        name, details = (part.strip() for part in ingredient_line.split(":", 1))
+        if not name:
+            continue
+        match = _QUANTITY_RE.search(details)
+        quantity = None
+        unit = None
+        if match:
+            quantity = _number(match.group("quantity").replace(",", "."))
+            unit = _text(match.group("unit")) or None
+        current["ingredients"].append(
+            {"name": name, "quantity": quantity, "unit": unit}
+        )
+    return [recipe for recipe in parsed if recipe["ingredients"]]
+
+
+def import_markdown_recipes(db: Session, content: str) -> dict[str, int]:
+    recipes = parse_markdown_recipes(content)
+    imported_recipes = imported_ingredients = 0
+    for source in recipes:
+        name = _text(source["name"])
+        recipe = db.query(Recipe).filter(Recipe.name == name).first()
+        if recipe is None:
+            recipe = Recipe(name=name, description=None, servings=2)
+            db.add(recipe)
+            db.flush()
+            imported_recipes += 1
+        recipe.ingredients = [
+            RecipeIngredient(
+                name=item["name"],
+                quantity=item["quantity"],
+                unit=item["unit"],
+            )
+            for item in source["ingredients"]
+        ]
+        imported_ingredients += len(recipe.ingredients)
+    db.commit()
+    return {
+        "recipes": len(recipes),
+        "new_recipes": imported_recipes,
+        "ingredients": imported_ingredients,
+    }
 
 
 def _active(row: dict[str, Any]) -> bool:

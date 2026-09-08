@@ -19,8 +19,8 @@ Todo el código de este proyecto ha sido generado con GitHub Copilot.
 - Seleccionar cualquier semana directamente desde el calendario del planificador.
 - Consultar las semanas guardadas.
 - Generar una lista de la compra a partir del menú semanal.
-- Importar un catálogo y su histórico desde un archivo JSON en la sección
-  **Recetas**.
+- Importar un catálogo y su histórico desde un archivo JSON, o recetas con
+  ingredientes y cantidades desde Markdown, en la sección **Recetas**.
 - Persistir los datos en SQLite.
 
 ## Requisitos
@@ -85,6 +85,10 @@ En **Recetas**, selecciona el JSON exportado desde
 activas, sus ingredientes, las semanas del planificador y el historial de uso.
 Las semanas se normalizan al lunes correspondiente y volver a cargar el mismo
 archivo no duplica planes ni usos.
+
+También puedes seleccionar un Markdown con recetas en formato `## Nombre` y
+líneas `- Ingrediente: cantidad unidad`. Las recetas se actualizan por nombre,
+incluidos sus ingredientes y cantidades.
 
 ## Estructura
 

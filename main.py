@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session, selectinload
 from crud import *
 from database import Base, engine, get_db, migrate_meal_plan_entries
 from models import Recipe as RecipeModel, ShoppingList as ShoppingListModel, ShoppingListItem as ShoppingListItemModel, UsageHistory as UsageHistoryModel
-from importer import import_external_data
+from importer import import_external_data, import_markdown_recipes
 from schemas import *
 
 Base.metadata.create_all(bind=engine)
@@ -25,6 +25,17 @@ def health(): return {"status": "ok"}
 def import_data(payload: dict, db: Session = Depends(get_db)):
     try:
         return import_external_data(db, payload)
+    except Exception:
+        db.rollback()
+        raise
+
+@app.post("/api/import-markdown")
+def import_markdown(payload: dict, db: Session = Depends(get_db)):
+    content = payload.get("content")
+    if not isinstance(content, str) or not content.strip():
+        raise HTTPException(422, "Markdown content is required")
+    try:
+        return import_markdown_recipes(db, content)
     except Exception:
         db.rollback()
         raise
