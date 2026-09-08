@@ -3,7 +3,7 @@ html{overflow-x:hidden}
 body{margin:0;overflow-x:hidden}
 button,input,textarea,select{font:inherit}
 button{cursor:pointer}
-button,.small,input[type=checkbox]{min-height:2.75rem}
+button,.small{min-height:2.75rem}
 .secondary{background:#e8f1eb;color:#2d5d49}
 .panel{border:1px solid #e2e8f0;border-radius:1rem;background:#fff;padding:1.25rem;box-shadow:0 8px 24px rgba(36,48,43,.05)}
 .hidden{display:none}
@@ -14,7 +14,7 @@ button,.small,input[type=checkbox]{min-height:2.75rem}
 .slot-title{font-size:.7rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#829087}
 .meal{display:flex;gap:.4rem;margin-top:.5rem}
 .meal input{min-width:0;flex:1;border:1px solid #dce4de;border-radius:.6rem;background:#f8faf9;padding:.55rem;outline:none}
-.planner-ingredients{margin-top:.7rem;border-radius:.7rem;background:#f8faf9;padding:.65rem}.planner-ingredients summary{cursor:pointer;list-style:none;font-size:.75rem;font-weight:800;color:#52625a}.planner-ingredients summary::-webkit-details-marker{display:none}.planner-ingredients summary::before{content:'▸';display:inline-block;margin-right:.35rem;transition:transform .15s ease}.planner-ingredients[open] summary::before{transform:rotate(90deg)}.planner-ingredients summary span{margin-left:.25rem;color:#829087;font-weight:600}.planner-ingredient-list{margin-top:.4rem}.planner-ingredients label{display:flex;align-items:center;justify-content:flex-start;gap:.5rem;margin:.3rem 0;font-size:.8rem;font-weight:500;text-align:left}.planner-ingredients label span{order:1}.planner-ingredients input{order:2;flex:0 0 auto;accent-color:#39735b}.planner-ingredients small{color:#829087}
+.planner-ingredients{margin-top:.7rem;border-radius:.7rem;background:#f8faf9;padding:.65rem}.planner-ingredients summary{cursor:pointer;list-style:none;font-size:.75rem;font-weight:800;color:#52625a}.planner-ingredients summary::-webkit-details-marker{display:none}.planner-ingredients summary::before{content:'▸';display:inline-block;margin-right:.35rem;transition:transform .15s ease}.planner-ingredients[open] summary::before{transform:rotate(90deg)}.planner-ingredients summary span{margin-left:.25rem;color:#829087;font-weight:600}.planner-ingredient-list{margin-top:.4rem}.planner-ingredients label{display:flex;align-items:center;justify-content:flex-start;gap:.5rem;margin:.3rem 0;font-size:.8rem;font-weight:500;text-align:left}.planner-ingredients label span{order:1}.planner-ingredients input[type=checkbox]{order:2;flex:0 0 1rem;width:1rem;height:1rem;min-height:1rem;margin:0;align-self:center;accent-color:#39735b}.planner-ingredients small{color:#829087}
 .meal select:focus,input:focus,textarea:focus{border-color:#78a68e;box-shadow:0 0 0 3px #e4f0e7}
 .actions{display:flex;flex-wrap:wrap;gap:.65rem;margin-top:1.25rem}
 .actions button,form button[type=submit]{border:0;border-radius:.75rem;background:#39735b;color:#fff;padding:.7rem 1rem;font-weight:700}
