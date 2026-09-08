@@ -28,7 +28,7 @@ Todo el código de este proyecto ha sido generado con GitHub Copilot.
 - Python 3.12 o posterior.
 - Docker y Docker Compose (opcional).
 
-Los archivos `requirements.txt` se mantienen fuera del repositorio. Para una
+Para una
 instalación local, instala las dependencias directamente:
 
 ```bash
