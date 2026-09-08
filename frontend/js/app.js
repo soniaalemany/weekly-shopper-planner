@@ -3,6 +3,24 @@ const state = { week: monday(new Date()), plan: { entries: [] }, recipes: [], se
 const $ = (id) => document.getElementById(id);
 
 function iso(date) { return date.toISOString().slice(0, 10); }
+function weekInputValue(value) {
+  const date = new Date(`${value}T00:00:00Z`);
+  const thursday = new Date(date);
+  thursday.setUTCDate(date.getUTCDate() + (4 - (date.getUTCDay() || 7)));
+  const yearStart = new Date(Date.UTC(thursday.getUTCFullYear(), 0, 1));
+  const week = Math.ceil((((thursday - yearStart) / 86400000) + 1) / 7);
+  return `${thursday.getUTCFullYear()}-W${String(week).padStart(2, '0')}`;
+}
+function mondayFromWeekInput(value) {
+  const match = /^(\d{4})-W(\d{2})$/.exec(value);
+  if (!match) return state.week;
+  const year = Number(match[1]);
+  const week = Number(match[2]);
+  const januaryFourth = new Date(Date.UTC(year, 0, 4));
+  const monday = new Date(januaryFourth);
+  monday.setUTCDate(januaryFourth.getUTCDate() - (januaryFourth.getUTCDay() || 7) + 1 + ((week - 1) * 7));
+  return iso(monday);
+}
 function monday(value) {
   const date = new Date(value);
   date.setDate(date.getDate() - ((date.getDay() + 6) % 7));
@@ -19,7 +37,7 @@ function shiftWeek(amount) {
   const date = new Date(`${state.week}T00:00:00`);
   date.setDate(date.getDate() + amount * 7);
   state.week = iso(date);
-  $('week-picker').value = state.week;
+  $('week-picker').value = weekInputValue(state.week);
   loadPlan();
 }
 function renderSavedWeeks(plans) {
@@ -317,14 +335,14 @@ async function load() {
 }
 
 $('recipe-options').replaceChildren();
-$('week-picker').value = state.week;
-$('week-picker').addEventListener('change', (event) => { state.week = monday(event.target.value); event.target.value = state.week; loadPlan(); });
+$('week-picker').value = weekInputValue(state.week);
+$('week-picker').addEventListener('change', (event) => { state.week = mondayFromWeekInput(event.target.value); event.target.value = weekInputValue(state.week); loadPlan(); });
 $('previous-week').onclick = () => shiftWeek(-1);
 $('next-week').onclick = () => shiftWeek(1);
 $('saved-weeks').addEventListener('change', (event) => {
   if (!event.target.value) return;
   state.week = event.target.value;
-  $('week-picker').value = state.week;
+  $('week-picker').value = weekInputValue(state.week);
   loadPlan();
 });
 
