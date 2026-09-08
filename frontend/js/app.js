@@ -29,7 +29,14 @@ function monday(value) {
 function recipeFor(value) {
   return state.recipes.find((recipe) => recipe.name.toLocaleLowerCase() === value.trim().toLocaleLowerCase());
 }
+function recipeMatches(value) {
+  const query = value.trim().toLocaleLowerCase();
+  return query ? state.recipes.filter((recipe) => recipe.name.toLocaleLowerCase().includes(query)) : state.recipes;
+}
 function ingredientKey(recipeId, index, day, meal, position) { return `${day}:${meal}:${position}:${recipeId}:${index}`; }
+function shoppingIngredientKey(name, unit) {
+  return `${name.trim().toLocaleLowerCase()}|${(unit || '').trim().toLocaleLowerCase()}`;
+}
 function escapeHtml(value) {
   return String(value).replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[character]));
 }
@@ -64,16 +71,62 @@ async function request(url, options = {}) {
 function ingredientChecklist(recipe, day, meal, position) {
   const ingredients = recipe?.ingredients || [];
   if (!recipe || !ingredients.length) return '';
-  return `<details class="planner-ingredients"><summary>Ingredientes para añadir <span>${ingredients.length}</span></summary><div class="planner-ingredient-list">${ingredients.map((ingredient, index) => {
+  return `<div class="planner-ingredients"><button type="button" class="ingredient-list-toggle" aria-expanded="false" aria-label="Mostrar ingredientes para la compra" title="Mostrar ingredientes para la compra">☷</button><div class="planner-ingredient-list hidden">${ingredients.map((ingredient, index) => {
     const key = ingredientKey(recipe.id, index, day, meal, position);
     const details = [ingredient.quantity, ingredient.unit].filter(Boolean).join(' ');
-    return `<label><span>${escapeHtml(ingredient.name)}${details ? ` <small>(${escapeHtml(details)})</small>` : ''}</span><input type="checkbox" data-ingredient-key="${key}" data-recipe-id="${recipe.id}" data-ingredient-index="${index}" data-day="${day}" data-meal="${meal}" ${state.selectedIngredients.has(key) ? 'checked' : ''}></label>`;
-  }).join('')}</div></details>`;
+    const checked = state.selectedIngredients.has(shoppingIngredientKey(ingredient.name, ingredient.unit));
+    return `<label><span>${escapeHtml(ingredient.name)}${details ? ` <small>(${escapeHtml(details)})</small>` : ''}</span><input type="checkbox" data-ingredient-key="${key}" data-recipe-id="${recipe.id}" data-ingredient-index="${index}" data-day="${day}" data-meal="${meal}" ${checked ? 'checked' : ''}></label>`;
+  }).join('')}</div></div>`;
 }
 
 function setSlotRecipe(slot, value) {
   slot.querySelector('.recipe-input').value = value;
   updateSlot(slot);
+}
+
+function closeAutocomplete(slot) {
+  slot.querySelector('.recipe-autocomplete')?.classList.add('hidden');
+}
+
+function showAutocomplete(slot) {
+  const input = slot.querySelector('.recipe-input');
+  const autocomplete = slot.querySelector('.recipe-autocomplete');
+  const query = input.value.trim();
+  const matches = recipeMatches(query);
+  autocomplete.replaceChildren();
+  if (!query) {
+    closeAutocomplete(slot);
+    return;
+  }
+  matches.forEach((recipe) => {
+    const option = document.createElement('button');
+    option.type = 'button';
+    option.className = 'recipe-suggestion';
+    option.setAttribute('role', 'option');
+    option.textContent = recipe.name;
+    option.addEventListener('mousedown', (event) => event.preventDefault());
+    option.addEventListener('click', () => {
+      input.value = recipe.name;
+      updateSlot(slot);
+      closeAutocomplete(slot);
+      scheduleSave();
+    });
+    autocomplete.append(option);
+  });
+  if (!matches.length) {
+    const createOption = document.createElement('button');
+    createOption.type = 'button';
+    createOption.className = 'recipe-suggestion recipe-suggestion-create';
+    createOption.setAttribute('role', 'option');
+    createOption.textContent = `Añadir "${query}"`;
+    createOption.addEventListener('mousedown', (event) => event.preventDefault());
+    createOption.addEventListener('click', () => {
+      closeAutocomplete(slot);
+      createRecipe(query, slot);
+    });
+    autocomplete.append(createOption);
+  }
+  autocomplete.classList.toggle('hidden', !autocomplete.children.length);
 }
 
 function moveRecipe(source, target) {
@@ -83,6 +136,80 @@ function moveRecipe(source, target) {
   setSlotRecipe(target, sourceValue);
   setSlotRecipe(source, targetValue);
   scheduleSave();
+}
+
+function syncOptionalSlot(slot) {
+  const position = +slot.dataset.position;
+  const meal = slot.dataset.meal;
+  const day = slot.dataset.day;
+  const recipe = recipeFor(slot.querySelector('.recipe-input').value);
+  if (position === 0 && !recipe) {
+    slot.querySelector('.add-optional')?.remove();
+    slot.querySelector('.remove-recipe')?.remove();
+    slot.querySelector('.drag-handle')?.remove();
+    slot.querySelector('.drag-hint')?.remove();
+    slot.querySelector('.meal').draggable = false;
+    const optionalSlot = [...document.querySelectorAll('.slot')].find((candidate) => (
+      candidate.dataset.day === day && candidate.dataset.meal === meal && candidate.dataset.position === '1'
+    ));
+    optionalSlot?.classList.add('hidden');
+    if (optionalSlot) optionalSlot.querySelector('.recipe-input').value = '';
+    return;
+  }
+  if (position === 1 && !recipe) {
+    slot.classList.add('hidden');
+    slot.querySelector('.recipe-input').value = '';
+    slot.querySelector('.planner-ingredients')?.remove();
+    const primarySlot = [...document.querySelectorAll('.slot')].find((candidate) => (
+      candidate.dataset.day === day && candidate.dataset.meal === meal && candidate.dataset.position === '0'
+    ));
+    primarySlot?.querySelector('.add-optional')?.remove();
+    addOptionalButton(primarySlot);
+  }
+}
+
+function addOptionalButton(slot) {
+  if (!slot || slot.dataset.position !== '0' || slot.querySelector('.add-optional')) return;
+  if (!recipeFor(slot.querySelector('.recipe-input').value)) return;
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'secondary small add-optional';
+  button.textContent = '+ Añadir otro plato';
+  button.addEventListener('click', () => {
+    const optionalSlot = [...document.querySelectorAll('.slot')].find((candidate) => (
+      candidate.dataset.day === slot.dataset.day &&
+      candidate.dataset.meal === slot.dataset.meal &&
+      candidate.dataset.position === '1'
+    ));
+    optionalSlot?.classList.remove('hidden');
+    optionalSlot?.querySelector('.recipe-input')?.focus();
+    button.remove();
+  });
+  slot.append(button);
+}
+
+function ensureRecipeControls(slot) {
+  if (!recipeFor(slot.querySelector('.recipe-input').value) || slot.querySelector('.remove-recipe')) return;
+  const meal = slot.querySelector('.meal');
+  meal.draggable = true;
+  meal.insertAdjacentHTML('afterbegin', '<span class="drag-handle" aria-hidden="true">⠿</span>');
+  const hint = Object.assign(document.createElement('span'), { className: 'drag-hint', textContent: 'Arrastra para mover' });
+  const removeButton = Object.assign(document.createElement('button'), {
+    type: 'button', className: 'remove-recipe small', textContent: '🗑',
+    ariaLabel: 'Eliminar plato', title: 'Eliminar plato',
+  });
+  meal.querySelector('.recipe-input-wrap').after(hint);
+  meal.append(removeButton);
+  removeButton.addEventListener('click', () => {
+    setSlotRecipe(slot, '');
+    removeButton.remove();
+    meal.querySelector('.drag-handle')?.remove();
+    hint.remove();
+    meal.draggable = false;
+    syncOptionalSlot(slot);
+    scheduleSave();
+  });
+  enableTouchDragging(slot);
 }
 
 function enableTouchDragging(slot) {
@@ -159,34 +286,54 @@ function render() {
       slot.dataset.meal = meal;
       slot.dataset.position = position;
       const hasRecipe = Boolean(current?.recipe);
-      slot.innerHTML = `<div class="slot-title">${meal}${position ? ' · opcional' : ''}</div><div class="meal"${hasRecipe ? ' draggable="true" title="Arrastra para mover esta receta"' : ''}>${hasRecipe ? '<span class="drag-handle" aria-hidden="true">⠿</span>' : ''}<input class="recipe-input" list="recipe-options" placeholder="${position ? 'Añadir segunda receta...' : 'Buscar o crear receta...'}" value="${escapeHtml(current?.recipe?.name || '')}" aria-label="${meal}${position ? ' opcional' : ''} del ${name}">${hasRecipe ? '<span class="drag-hint">Arrastra para mover</span>' : ''}<button type="button" class="${hasRecipe ? 'remove-recipe' : 'secondary create-recipe'} small" aria-label="${hasRecipe ? 'Eliminar receta' : 'Añadir receta'}" title="${hasRecipe ? 'Eliminar receta' : 'Añadir receta'}">${hasRecipe ? '🗑' : '+'}</button></div>`;
+      slot.innerHTML = `<div class="slot-title">${meal}${position ? ' · opcional' : ''}</div><div class="meal"${hasRecipe ? ' draggable="true" title="Arrastra para mover esta receta"' : ''}>${hasRecipe ? '<span class="drag-handle" aria-hidden="true">⠿</span>' : ''}<div class="recipe-input-wrap"><input class="recipe-input" placeholder="${position ? 'Añadir segundo plato...' : 'Buscar o crear plato...'}" value="${escapeHtml(current?.recipe?.name || '')}" aria-label="${meal}${position ? ' opcional' : ''} del ${name}"><div class="recipe-autocomplete hidden" role="listbox"></div></div>${hasRecipe ? '<span class="drag-hint">Arrastra para mover</span><button type="button" class="remove-recipe small" aria-label="Eliminar plato" title="Eliminar plato">🗑</button>' : ''}</div>`;
       const input = slot.querySelector('.recipe-input');
       const recipe = state.recipes.find((item) => item.id === current?.recipe_id);
       slot.insertAdjacentHTML('beforeend', ingredientChecklist(recipe, day, meal, position));
-      if (position === 0 && !optionalEntry) {
-        const addOptional = document.createElement('button');
-        addOptional.type = 'button';
-        addOptional.className = 'secondary small add-optional';
-        addOptional.textContent = '+';
-        addOptional.setAttribute('aria-label', 'Añadir segunda receta');
-        addOptional.title = 'Añadir segunda receta';
-        addOptional.addEventListener('click', () => {
-          const optionalSlot = [...document.querySelectorAll('.slot')].find((candidate) => (
-            candidate.dataset.day === String(day) &&
-            candidate.dataset.meal === meal &&
-            candidate.dataset.position === '1'
-          ));
-          optionalSlot?.classList.remove('hidden');
-          optionalSlot?.querySelector('.recipe-input')?.focus();
-          addOptional.remove();
-        });
-        slot.querySelector('.slot-title').append(' ', addOptional);
-      }
-      input.addEventListener('change', () => { updateSlot(slot); scheduleSave(); });
-      input.addEventListener('keydown', (event) => { if (event.key === 'Enter') { event.preventDefault(); updateSlot(slot); scheduleSave(); } });
-      slot.querySelector('.create-recipe')?.addEventListener('click', () => updateSlot(slot, true));
+      slot.querySelector('.ingredient-list-toggle')?.addEventListener('click', (event) => {
+        const button = event.currentTarget;
+        const list = slot.querySelector('.planner-ingredient-list');
+        const expanded = button.getAttribute('aria-expanded') === 'true';
+        button.setAttribute('aria-expanded', String(!expanded));
+        list.classList.toggle('hidden', expanded);
+      });
+      if (position === 0 && !optionalEntry) addOptionalButton(slot);
+      input.addEventListener('input', () => showAutocomplete(slot));
+      input.addEventListener('focus', () => showAutocomplete(slot));
+      input.addEventListener('blur', () => setTimeout(() => closeAutocomplete(slot), 150));
+      input.addEventListener('change', () => {
+        updateSlot(slot);
+        if (position === 0) addOptionalButton(slot);
+        syncOptionalSlot(slot);
+        scheduleSave();
+      });
+      input.addEventListener('keydown', (event) => {
+        const suggestions = slot.querySelectorAll('.recipe-suggestion');
+        if (event.key === 'ArrowDown' && suggestions.length) {
+          event.preventDefault();
+          suggestions[0].focus();
+        } else if (event.key === 'Escape') {
+          closeAutocomplete(slot);
+        } else if (event.key === 'Enter') {
+          event.preventDefault();
+          if (!recipeFor(input.value) && !recipeMatches(input.value).length && input.value.trim()) {
+            closeAutocomplete(slot);
+            createRecipe(input.value.trim(), slot);
+          } else {
+            updateSlot(slot);
+            if (position === 0) addOptionalButton(slot);
+            syncOptionalSlot(slot);
+            scheduleSave();
+          }
+        }
+      });
       slot.querySelector('.remove-recipe')?.addEventListener('click', () => {
         setSlotRecipe(slot, '');
+        slot.querySelector('.remove-recipe')?.remove();
+        slot.querySelector('.drag-handle')?.remove();
+        slot.querySelector('.drag-hint')?.remove();
+        slot.querySelector('.meal').draggable = false;
+        syncOptionalSlot(slot);
         scheduleSave();
       });
       slot.querySelector('.meal').addEventListener('dragstart', (event) => {
@@ -214,7 +361,17 @@ function render() {
       });
       enableTouchDragging(slot);
       slot.addEventListener('change', (event) => {
-        if (event.target.matches('input[type="checkbox"]')) syncShoppingList();
+        if (event.target.matches('input[type="checkbox"]')) {
+          const checkbox = event.target;
+          const recipe = state.recipes.find((item) => item.id === +checkbox.dataset.recipeId);
+          const ingredient = recipe?.ingredients?.[+checkbox.dataset.ingredientIndex];
+          if (ingredient) {
+            const key = shoppingIngredientKey(ingredient.name, ingredient.unit);
+            if (checkbox.checked) state.selectedIngredients.add(key);
+            else state.selectedIngredients.delete(key);
+          }
+          syncShoppingList();
+        }
       });
       card.append(slot);
       });
@@ -232,6 +389,7 @@ function updateSlot(slot, createNew = false) {
   }
   slot.querySelector('.planner-ingredients')?.remove();
   slot.insertAdjacentHTML('beforeend', ingredientChecklist(recipe, +slot.dataset.day, slot.dataset.meal, +slot.dataset.position));
+  ensureRecipeControls(slot);
 }
 
 async function createRecipe(name, slot) {
@@ -240,7 +398,6 @@ async function createRecipe(name, slot) {
     state.recipes.push(recipe);
     const meal = slot.querySelector('.meal');
     const input = slot.querySelector('.recipe-input');
-    const createButton = slot.querySelector('.create-recipe');
     input.value = recipe.name;
     meal.draggable = true;
     meal.title = 'Arrastra para mover esta receta';
@@ -248,20 +405,28 @@ async function createRecipe(name, slot) {
     const hint = document.createElement('span');
     hint.className = 'drag-hint';
     hint.textContent = 'Arrastra para mover';
-    createButton.replaceWith(Object.assign(document.createElement('button'), {
+    const removeButton = Object.assign(document.createElement('button'), {
       type: 'button',
       className: 'remove-recipe small',
       textContent: '🗑',
       ariaLabel: 'Eliminar receta',
       title: 'Eliminar receta',
-    }));
+    });
+    meal.append(removeButton);
     enableTouchDragging(slot);
-    meal.querySelector('.remove-recipe').addEventListener('click', () => {
+    removeButton.addEventListener('click', () => {
       setSlotRecipe(slot, '');
+      removeButton.remove();
+      slot.querySelector('.drag-handle')?.remove();
+      hint.remove();
+      meal.draggable = false;
+      addOptionalButton(slot);
+      syncOptionalSlot(slot);
       scheduleSave();
     });
-    meal.querySelector('.recipe-input').after(hint);
+    meal.querySelector('.recipe-input-wrap').after(hint);
     updateSlot(slot);
+    addOptionalButton(slot);
     scheduleSave();
     $('plan-status').textContent = `Receta "${recipe.name}" creada.`;
   } catch (error) {
@@ -281,7 +446,7 @@ function selectedShoppingItems() {
         (item.position || 0) === +checkbox.closest('.slot').dataset.position
       ));
       const scale = entry?.servings ? entry.servings / recipe.servings : 1;
-      const key = `${ingredient.name.trim().toLocaleLowerCase()}|${(ingredient.unit || '').trim().toLocaleLowerCase()}`;
+      const key = shoppingIngredientKey(ingredient.name, ingredient.unit);
       const existing = totals.get(key);
       if (existing && ingredient.quantity != null) existing.quantity = (existing.quantity || 0) + ingredient.quantity * scale;
       else if (!existing) {
@@ -299,7 +464,9 @@ async function savePlan() {
     });
     state.plan = await request(`/meal-plans/${state.week}`, { method: 'PUT', body: JSON.stringify({ entries }) });
     await request(`/meal-plans/${state.week}/generate-shopping-list`, { method: 'POST' });
-    await request(`/shopping-lists/${state.week}`, { method: 'PUT', body: JSON.stringify({ items: selectedShoppingItems() }) });
+    const selectedItems = selectedShoppingItems();
+    await request(`/shopping-lists/${state.week}`, { method: 'PUT', body: JSON.stringify({ items: selectedItems }) });
+    state.selectedIngredients = new Set(selectedItems.map((item) => shoppingIngredientKey(item.name, item.unit)));
     $('plan-status').textContent = 'Cambios guardados.';
 }
 
@@ -317,24 +484,31 @@ function syncShoppingList() {
 async function loadPlan() {
   try { state.plan = await request(`/meal-plans/${state.week}`); }
   catch (error) { state.plan = { entries: [] }; if (!error.message.includes('404')) $('plan-status').textContent = 'No se pudo cargar la semana.'; }
+  await loadShoppingItems();
   $('saved-weeks').value = state.week;
   render();
+}
+async function loadShoppingItems() {
+  try {
+    const shopping = await request(`/shopping-lists/${state.week}`);
+    state.selectedIngredients = new Set((shopping.items || []).map((item) => shoppingIngredientKey(item.name, item.unit)));
+  } catch (error) {
+    if (!error.message.includes('404')) $('plan-status').textContent = 'No se pudo cargar la lista de la compra.';
+    state.selectedIngredients = new Set();
+  }
 }
 async function load() {
   try {
     state.recipes = await request('/recipes');
-    $('recipe-options').innerHTML = state.recipes.map((recipe) => `<option value="${escapeHtml(recipe.name)}"></option>`).join('');
   }
   catch (error) { $('plan-status').textContent = 'No se pudieron cargar las recetas.'; }
   try {
     renderSavedWeeks(await request('/meal-plans'));
   }
   catch (error) { $('plan-status').textContent = 'No se pudieron cargar las semanas guardadas.'; }
-  render();
   await loadPlan();
 }
 
-$('recipe-options').replaceChildren();
 $('week-picker').value = weekInputValue(state.week);
 $('week-picker').addEventListener('change', (event) => { state.week = mondayFromWeekInput(event.target.value); event.target.value = weekInputValue(state.week); loadPlan(); });
 $('previous-week').onclick = () => shiftWeek(-1);
