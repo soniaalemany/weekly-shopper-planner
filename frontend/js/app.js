@@ -46,10 +46,10 @@ async function request(url, options = {}) {
 function ingredientChecklist(recipe, day, meal, position) {
   const ingredients = recipe?.ingredients || [];
   if (!recipe || !ingredients.length) return '';
-  return `<details class="planner-ingredients" open><summary>Ingredientes para añadir <span>${ingredients.length}</span></summary><div class="planner-ingredient-list">${ingredients.map((ingredient, index) => {
+  return `<details class="planner-ingredients"><summary>Ingredientes para añadir <span>${ingredients.length}</span></summary><div class="planner-ingredient-list">${ingredients.map((ingredient, index) => {
     const key = ingredientKey(recipe.id, index, day, meal, position);
     const details = [ingredient.quantity, ingredient.unit].filter(Boolean).join(' ');
-    return `<label><input type="checkbox" data-ingredient-key="${key}" data-recipe-id="${recipe.id}" data-ingredient-index="${index}" data-day="${day}" data-meal="${meal}" ${state.selectedIngredients.has(key) ? 'checked' : ''}><span>${escapeHtml(ingredient.name)}${details ? ` <small>(${escapeHtml(details)})</small>` : ''}</span></label>`;
+    return `<label><span>${escapeHtml(ingredient.name)}${details ? ` <small>(${escapeHtml(details)})</small>` : ''}</span><input type="checkbox" data-ingredient-key="${key}" data-recipe-id="${recipe.id}" data-ingredient-index="${index}" data-day="${day}" data-meal="${meal}" ${state.selectedIngredients.has(key) ? 'checked' : ''}></label>`;
   }).join('')}</div></details>`;
 }
 
@@ -65,6 +65,56 @@ function moveRecipe(source, target) {
   setSlotRecipe(target, sourceValue);
   setSlotRecipe(source, targetValue);
   scheduleSave();
+}
+
+function enableTouchDragging(slot) {
+  const meal = slot.querySelector('.meal[draggable="true"]');
+  const handle = slot.querySelector('.drag-handle');
+  if (!meal || !handle) return;
+  let timer = null;
+  let dragging = false;
+
+  const clearDrag = () => {
+    clearTimeout(timer);
+    timer = null;
+    if (!dragging) return;
+    dragging = false;
+    slot.classList.remove('dragging');
+    document.querySelectorAll('.slot.drag-over').forEach((candidate) => candidate.classList.remove('drag-over'));
+  };
+
+  handle.addEventListener('pointerdown', (event) => {
+    if (event.pointerType !== 'touch') return;
+    event.preventDefault();
+    handle.setPointerCapture(event.pointerId);
+    timer = setTimeout(() => {
+      dragging = true;
+      slot.classList.add('dragging');
+    }, 180);
+  });
+
+  handle.addEventListener('pointermove', (event) => {
+    if (!dragging) return;
+    event.preventDefault();
+    const target = document.elementFromPoint(event.clientX, event.clientY)?.closest('.slot');
+    document.querySelectorAll('.slot.drag-over').forEach((candidate) => {
+      if (candidate !== target) candidate.classList.remove('drag-over');
+    });
+    if (target && target !== slot) target.classList.add('drag-over');
+  });
+
+  const finishTouchDrag = (event) => {
+    if (!dragging) {
+      clearDrag();
+      return;
+    }
+    const target = document.elementFromPoint(event.clientX, event.clientY)?.closest('.slot');
+    clearDrag();
+    if (target && target !== slot) moveRecipe(slot, target);
+  };
+
+  handle.addEventListener('pointerup', finishTouchDrag);
+  handle.addEventListener('pointercancel', clearDrag);
 }
 
 function render() {
@@ -144,6 +194,7 @@ function render() {
         ));
         if (source) moveRecipe(source, slot);
       });
+      enableTouchDragging(slot);
       slot.addEventListener('change', (event) => {
         if (event.target.matches('input[type="checkbox"]')) syncShoppingList();
       });
@@ -186,6 +237,7 @@ async function createRecipe(name, slot) {
       ariaLabel: 'Eliminar receta',
       title: 'Eliminar receta',
     }));
+    enableTouchDragging(slot);
     meal.querySelector('.remove-recipe').addEventListener('click', () => {
       setSlotRecipe(slot, '');
       scheduleSave();
