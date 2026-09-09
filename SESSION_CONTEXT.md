@@ -275,3 +275,24 @@ Priorizar una experiencia móvil sencilla: días apilados verticalmente, edició
 - Validaciones recientes:
   - `node --check app.js`
   - `git diff --check`
+
+## Corrección del drag & drop táctil (2026-09-09)
+
+- Se reforzó el arrastre táctil en `app.js` para Chrome, Vivaldi, Brave y
+  navegadores móviles basados en Chromium:
+  - se conserva el `pointerId` activo durante todo el gesto;
+  - se desactiva temporalmente el drag nativo HTML5 mientras se inicia el gesto
+   táctil, evitando que intercepte el `pointerup`;
+  - se libera explícitamente la captura del puntero antes de resolver el destino;
+  - el destino se determina con `document.elementsFromPoint`, incluso cuando el
+   puntero queda sobre contenido interno del slot;
+  - se gestionan `pointerup`, `pointercancel` y `lostpointercapture`;
+  - se restauran los estados visuales y el atributo `draggable` al finalizar.
+- Se mantienen el intercambio de recetas entre slots ocupados y la colocación
+  en slots vacíos.
+- Validaciones realizadas:
+  - `node --check app.js`;
+  - `python3 -m compileall -q .`;
+  - `git diff --check`;
+  - carga de la aplicación en navegador, comprobando que se renderizan los
+   slots y elementos arrastrables.

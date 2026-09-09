@@ -248,30 +248,42 @@ function enableTouchDragging(slot) {
   let timer = null;
   let dragging = false;
   let dropTarget = null;
+  let activePointerId = null;
+  let nativeDraggingEnabled = true;
+  let finishing = false;
 
   const clearDrag = () => {
     clearTimeout(timer);
     timer = null;
+    if (activePointerId !== null && handle.hasPointerCapture(activePointerId)) {
+      handle.releasePointerCapture(activePointerId);
+    }
+    activePointerId = null;
+    meal.draggable = nativeDraggingEnabled;
     dropTarget = null;
-    if (!dragging) return;
     dragging = false;
     slot.classList.remove('dragging');
     document.querySelectorAll('.slot.drag-over').forEach((candidate) => candidate.classList.remove('drag-over'));
   };
 
   const updateDropTarget = (clientX, clientY) => {
-    const target = document.elementFromPoint(clientX, clientY)?.closest('.slot');
+    const target = document.elementsFromPoint(clientX, clientY)
+      .map((element) => element.closest('.slot'))
+      .find((candidate) => candidate && candidate !== slot);
     document.querySelectorAll('.slot.drag-over').forEach((candidate) => {
       if (candidate !== target) candidate.classList.remove('drag-over');
     });
-    dropTarget = target && target !== slot ? target : null;
+    dropTarget = target || null;
     if (dropTarget) dropTarget.classList.add('drag-over');
   };
 
   handle.addEventListener('pointerdown', (event) => {
     if (event.pointerType !== 'touch') return;
     event.preventDefault();
-    handle.setPointerCapture(event.pointerId);
+    activePointerId = event.pointerId;
+    nativeDraggingEnabled = meal.draggable;
+    meal.draggable = false;
+    handle.setPointerCapture(activePointerId);
     timer = setTimeout(() => {
       dragging = true;
       slot.classList.add('dragging');
@@ -279,25 +291,29 @@ function enableTouchDragging(slot) {
   });
 
   handle.addEventListener('pointermove', (event) => {
-    if (!dragging) return;
+    if (event.pointerId !== activePointerId || !dragging) return;
     event.preventDefault();
     updateDropTarget(event.clientX, event.clientY);
   });
 
   const finishTouchDrag = (event) => {
-    if (!dragging) {
-      clearDrag();
-      return;
+    if (event.pointerId !== activePointerId || finishing) return;
+    finishing = true;
+    if (dragging) {
+      if (handle.hasPointerCapture(activePointerId)) handle.releasePointerCapture(activePointerId);
+      updateDropTarget(event.clientX, event.clientY);
     }
-    const elementAtRelease = document.elementFromPoint(event.clientX, event.clientY);
-    if (elementAtRelease) updateDropTarget(event.clientX, event.clientY);
-    const target = dropTarget;
+    const finalTarget = dropTarget;
     clearDrag();
-    if (target && target !== slot) moveRecipe(slot, target);
+    finishing = false;
+    if (finalTarget && finalTarget !== slot) moveRecipe(slot, finalTarget);
   };
 
   handle.addEventListener('pointerup', finishTouchDrag);
   handle.addEventListener('pointercancel', clearDrag);
+  handle.addEventListener('lostpointercapture', (event) => {
+    if (event.pointerId === activePointerId && dragging) finishTouchDrag(event);
+  });
 }
 
 function render() {
