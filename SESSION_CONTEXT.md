@@ -251,3 +251,27 @@ Priorizar una experiencia móvil sencilla: días apilados verticalmente, edició
 - Validaciones realizadas:
   - `python3 -m py_compile importer.py main.py schemas.py models.py`
   - `git diff --check`
+
+## Mejoras recientes de interacción móvil y drag & drop
+
+- Se corrigió el drag & drop táctil en navegadores móviles:
+  - el destino se mantiene durante el movimiento táctil;
+  - el `pointerup` completa el movimiento usando el último destino válido;
+  - se limpian correctamente los estados visuales del arrastre.
+- Se actualizó la versión cacheada de `app.js` en `index.html` para que los
+  navegadores móviles reciban los cambios.
+- Los dos slots de cada comida o cena se agrupan bajo un único encabezado
+  (`comida` o `cena`).
+- El segundo slot permanece oculto si está vacío y se muestra mediante un botón
+  pequeño con la etiqueta `+`, situado entre ambos slots.
+- El botón `+` se inserta después de añadir el slot al grupo, evitando que
+  desaparezca por no tener todavía un padre en el DOM.
+- El drag & drop de escritorio identifica cada slot por día, comida y posición,
+  por lo que los dos slots de una misma comida ya no se confunden.
+- Al arrastrar una receta:
+  - un slot vacío recibe la receta;
+  - dos slots ocupados intercambian sus recetas;
+  - los controles auxiliares del slot que queda vacío se limpian.
+- Validaciones recientes:
+  - `node --check app.js`
+  - `git diff --check`

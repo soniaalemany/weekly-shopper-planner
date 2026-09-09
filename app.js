@@ -132,6 +132,10 @@ function moveRecipe(source, target) {
   const targetValue = target.querySelector('.recipe-input').value;
   setSlotRecipe(target, sourceValue);
   setSlotRecipe(source, targetValue);
+  [source, target].forEach((slot) => {
+    if (recipeFor(slot.querySelector('.recipe-input').value)) return;
+    clearSlotControls(slot);
+  });
   scheduleSave();
 }
 
@@ -157,7 +161,7 @@ function syncOptionalSlot(slot) {
   const day = slot.dataset.day;
   const recipe = recipeFor(slot.querySelector('.recipe-input').value);
   if (position === 0 && !recipe) {
-    slot.querySelector('.add-optional')?.remove();
+    optionalButtonFor(slot)?.remove();
     const optionalSlot = mealSlot(day, meal, 1);
     const optionalRecipe = optionalSlot && recipeFor(optionalSlot.querySelector('.recipe-input').value);
     if (optionalSlot && optionalRecipe) {
@@ -182,29 +186,35 @@ function syncOptionalSlot(slot) {
     slot.querySelector('.recipe-input').value = '';
     clearSlotControls(slot);
     const primarySlot = mealSlot(day, meal, 0);
-    primarySlot?.querySelector('.add-optional')?.remove();
+    primarySlot && optionalButtonFor(primarySlot)?.remove();
     addOptionalButton(primarySlot);
   }
 }
 
 function addOptionalButton(slot) {
-  if (!slot || slot.dataset.position !== '0' || slot.querySelector('.add-optional')) return;
+  if (!slot || slot.dataset.position !== '0' || optionalButtonFor(slot)) return;
   if (!recipeFor(slot.querySelector('.recipe-input').value)) return;
   const button = document.createElement('button');
   button.type = 'button';
   button.className = 'secondary small add-optional';
-  button.textContent = '+ Añadir otro plato';
+  button.textContent = '+';
+  button.setAttribute('aria-label', 'Añadir otro plato');
+  button.title = 'Añadir otro plato';
+  button.dataset.day = slot.dataset.day;
+  button.dataset.meal = slot.dataset.meal;
   button.addEventListener('click', () => {
-    const optionalSlot = [...document.querySelectorAll('.slot')].find((candidate) => (
-      candidate.dataset.day === slot.dataset.day &&
-      candidate.dataset.meal === slot.dataset.meal &&
-      candidate.dataset.position === '1'
-    ));
+    const optionalSlot = mealSlot(slot.dataset.day, slot.dataset.meal, 1);
     optionalSlot?.classList.remove('hidden');
     optionalSlot?.querySelector('.recipe-input')?.focus();
     button.remove();
   });
-  slot.append(button);
+  slot.after(button);
+}
+
+function optionalButtonFor(slot) {
+  return [...document.querySelectorAll('.add-optional')].find((button) => (
+    button.dataset.day === slot.dataset.day && button.dataset.meal === slot.dataset.meal
+  ));
 }
 
 function ensureRecipeControls(slot) {
@@ -237,14 +247,25 @@ function enableTouchDragging(slot) {
   if (!meal || !handle) return;
   let timer = null;
   let dragging = false;
+  let dropTarget = null;
 
   const clearDrag = () => {
     clearTimeout(timer);
     timer = null;
+    dropTarget = null;
     if (!dragging) return;
     dragging = false;
     slot.classList.remove('dragging');
     document.querySelectorAll('.slot.drag-over').forEach((candidate) => candidate.classList.remove('drag-over'));
+  };
+
+  const updateDropTarget = (clientX, clientY) => {
+    const target = document.elementFromPoint(clientX, clientY)?.closest('.slot');
+    document.querySelectorAll('.slot.drag-over').forEach((candidate) => {
+      if (candidate !== target) candidate.classList.remove('drag-over');
+    });
+    dropTarget = target && target !== slot ? target : null;
+    if (dropTarget) dropTarget.classList.add('drag-over');
   };
 
   handle.addEventListener('pointerdown', (event) => {
@@ -260,11 +281,7 @@ function enableTouchDragging(slot) {
   handle.addEventListener('pointermove', (event) => {
     if (!dragging) return;
     event.preventDefault();
-    const target = document.elementFromPoint(event.clientX, event.clientY)?.closest('.slot');
-    document.querySelectorAll('.slot.drag-over').forEach((candidate) => {
-      if (candidate !== target) candidate.classList.remove('drag-over');
-    });
-    if (target && target !== slot) target.classList.add('drag-over');
+    updateDropTarget(event.clientX, event.clientY);
   });
 
   const finishTouchDrag = (event) => {
@@ -272,7 +289,9 @@ function enableTouchDragging(slot) {
       clearDrag();
       return;
     }
-    const target = document.elementFromPoint(event.clientX, event.clientY)?.closest('.slot');
+    const elementAtRelease = document.elementFromPoint(event.clientX, event.clientY);
+    if (elementAtRelease) updateDropTarget(event.clientX, event.clientY);
+    const target = dropTarget;
     clearDrag();
     if (target && target !== slot) moveRecipe(slot, target);
   };
@@ -307,6 +326,9 @@ function render() {
     card.innerHTML = `<h2>${name}<br><span class="text-xs font-medium text-slate-400">${currentDate.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', timeZone: 'UTC' })}</span></h2>`;
 
     ['comida', 'cena'].forEach((meal) => {
+      const mealGroup = document.createElement('section');
+      mealGroup.className = 'meal-group';
+      mealGroup.innerHTML = `<h3 class="slot-title">${meal}</h3>`;
       [0, 1].forEach((position) => {
       const current = normalizedEntries.find((entry) => entry.day_of_week === day && entry.meal_type === meal && (entry.position || 0) === position);
       const optionalEntry = position === 0 && normalizedEntries.some((entry) => entry.day_of_week === day && entry.meal_type === meal && (entry.position || 0) === 1);
@@ -316,12 +338,11 @@ function render() {
       slot.dataset.meal = meal;
       slot.dataset.position = position;
       const hasRecipe = Boolean(current?.recipe);
-      slot.innerHTML = `<div class="slot-title">${meal}${position ? ' · opcional' : ''}</div><div class="meal"${hasRecipe ? ' draggable="true" title="Arrastra para mover esta receta"' : ''}>${hasRecipe ? '<span class="drag-handle" aria-hidden="true">⠿</span>' : ''}<div class="recipe-input-wrap"><input class="recipe-input" placeholder="${position ? 'Añadir segundo plato...' : 'Buscar o crear plato...'}" value="${escapeHtml(current?.recipe?.name || '')}" aria-label="${meal}${position ? ' opcional' : ''} del ${name}"><div class="recipe-autocomplete hidden" role="listbox"></div></div>${hasRecipe ? '<span class="drag-hint">Arrastra para mover</span><button type="button" class="remove-recipe small" aria-label="Eliminar plato" title="Eliminar plato">🗑</button>' : ''}</div>`;
+      slot.innerHTML = `<div class="meal"${hasRecipe ? ' draggable="true" title="Arrastra para mover esta receta"' : ''}>${hasRecipe ? '<span class="drag-handle" aria-hidden="true">⠿</span>' : ''}<div class="recipe-input-wrap"><input class="recipe-input" placeholder="${position ? 'Añadir segundo plato...' : 'Buscar o crear plato...'}" value="${escapeHtml(current?.recipe?.name || '')}" aria-label="${meal}${position ? ' opcional' : ''} del ${name}"><div class="recipe-autocomplete hidden" role="listbox"></div></div>${hasRecipe ? '<span class="drag-hint">Arrastra para mover</span><button type="button" class="remove-recipe small" aria-label="Eliminar plato" title="Eliminar plato">🗑</button>' : ''}</div>`;
       const input = slot.querySelector('.recipe-input');
       const recipe = state.recipes.find((item) => item.id === current?.recipe_id);
       slot.insertAdjacentHTML('beforeend', ingredientChecklist(recipe, day, meal, position));
       addIngredientToggle(slot, recipe);
-      if (position === 0 && !optionalEntry) addOptionalButton(slot);
       input.addEventListener('input', () => showAutocomplete(slot));
       input.addEventListener('focus', () => showAutocomplete(slot));
       input.addEventListener('blur', () => setTimeout(() => closeAutocomplete(slot), 150));
@@ -362,7 +383,7 @@ function render() {
       });
       slot.querySelector('.meal').addEventListener('dragstart', (event) => {
         event.dataTransfer.effectAllowed = 'move';
-        event.dataTransfer.setData('text/recipe-slot', `${day}:${meal}`);
+        event.dataTransfer.setData('text/recipe-slot', `${day}:${meal}:${position}`);
         slot.classList.add('dragging');
       });
       slot.querySelector('.meal').addEventListener('dragend', () => slot.classList.remove('dragging'));
@@ -379,7 +400,7 @@ function render() {
         slot.classList.remove('drag-over');
         const sourceKey = event.dataTransfer.getData('text/recipe-slot');
         const source = [...document.querySelectorAll('.slot')].find((candidate) => (
-          `${candidate.dataset.day}:${candidate.dataset.meal}` === sourceKey
+          `${candidate.dataset.day}:${candidate.dataset.meal}:${candidate.dataset.position}` === sourceKey
         ));
         if (source) moveRecipe(source, slot);
       });
@@ -397,8 +418,10 @@ function render() {
           syncShoppingList();
         }
       });
-      card.append(slot);
+      mealGroup.append(slot);
+      if (position === 0 && !optionalEntry) addOptionalButton(slot);
       });
+      card.append(mealGroup);
     });
     grid.append(card);
   });
