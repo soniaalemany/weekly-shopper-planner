@@ -1,4 +1,5 @@
 from datetime import date, datetime
+from typing import Literal
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator
 
 class IngredientBase(BaseModel):
@@ -72,6 +73,7 @@ class ShoppingItemBase(BaseModel):
     unit: str | None = None
     category: str | None = None
     checked: bool = False
+    source: Literal["planner", "manual"] = "manual"
 class ShoppingItem(ShoppingItemBase):
     model_config = ConfigDict(from_attributes=True)
     id: int

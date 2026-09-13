@@ -296,3 +296,26 @@ Priorizar una experiencia móvil sencilla: días apilados verticalmente, edició
   - `git diff --check`;
   - carga de la aplicación en navegador, comprobando que se renderizan los
    slots y elementos arrastrables.
+
+## Persistencia de artículos manuales en la lista de compra (2026-09-13)
+
+- Se corrigió la regeneración automática de listas de compra para que no elimine
+  los artículos añadidos manualmente.
+- `ShoppingListItem.source` distingue entre artículos `manual` y artículos
+  `planner`. Las bases SQLite existentes se migran automáticamente con una
+  nueva columna cuyo valor histórico por defecto es `planner`.
+- `generate_shopping_list()` conserva los artículos manuales, incluidos sus
+  cantidades, unidades, categorías y estado marcado, y reemplaza únicamente
+  los artículos generados por el menú.
+- `savePlan()` conserva los artículos manuales al guardar cambios del menú y
+  marca como `planner` los ingredientes seleccionados desde el planificador.
+- `shopping.js` conserva la procedencia al editar o guardar la lista, evitando
+  que los artículos generados se conviertan accidentalmente en manuales.
+- Se incrementaron las versiones cacheadas de `app.js` y `shopping.js`.
+- Validaciones realizadas:
+  - `node --check app.js`;
+  - `node --check shopping.js`;
+  - `python3 -m py_compile models.py schemas.py database.py crud.py main.py importer.py`;
+  - prueba de integración SQLite para comprobar la conservación de artículos
+    manuales durante la regeneración;
+  - `git diff --check`.

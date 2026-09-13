@@ -62,6 +62,7 @@ class ShoppingListItem(Base):
     unit: Mapped[str | None] = mapped_column(String(40), nullable=True)
     category: Mapped[str | None] = mapped_column(String(80), nullable=True)
     checked: Mapped[bool] = mapped_column(default=False)
+    source: Mapped[str] = mapped_column(String(20), default="planner", server_default="planner")
     shopping_list: Mapped[ShoppingList] = relationship(back_populates="items")
 
 class UsageHistory(Base):

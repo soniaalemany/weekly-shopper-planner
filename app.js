@@ -527,9 +527,13 @@ async function savePlan() {
       return recipe ? [{ day_of_week: +slot.dataset.day, meal_type: slot.dataset.meal, position: +slot.dataset.position, recipe_id: recipe.id }] : [];
     });
     state.plan = await request(`/meal-plans/${state.week}`, { method: 'PUT', body: JSON.stringify({ entries }) });
-    await request(`/meal-plans/${state.week}/generate-shopping-list`, { method: 'POST' });
+    const generatedShopping = await request(`/meal-plans/${state.week}/generate-shopping-list`, { method: 'POST' });
     const selectedItems = selectedShoppingItems();
-    await request(`/shopping-lists/${state.week}`, { method: 'PUT', body: JSON.stringify({ items: selectedItems }) });
+    const manualItems = (generatedShopping.items || []).filter((item) => item.source === 'manual');
+    await request(`/shopping-lists/${state.week}`, {
+      method: 'PUT',
+      body: JSON.stringify({ items: [...manualItems, ...selectedItems.map((item) => ({ ...item, source: 'planner' }))] }),
+    });
     state.selectedIngredients = new Set(selectedItems.map((item) => shoppingIngredientKey(item.name, item.unit)));
     $('plan-status').textContent = 'Cambios guardados.';
 }
@@ -554,7 +558,9 @@ async function loadPlan() {
 async function loadShoppingItems() {
   try {
     const shopping = await request(`/shopping-lists/${state.week}`);
-    state.selectedIngredients = new Set((shopping.items || []).map((item) => shoppingIngredientKey(item.name, item.unit)));
+    state.selectedIngredients = new Set((shopping.items || [])
+      .filter((item) => item.source === 'planner')
+      .map((item) => shoppingIngredientKey(item.name, item.unit)));
   } catch (error) {
     if (!error.message.includes('404')) $('plan-status').textContent = 'No se pudo cargar la lista de la compra.';
     state.selectedIngredients = new Set();

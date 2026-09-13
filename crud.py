@@ -57,8 +57,27 @@ def generate_shopping_list(db, monday):
     plan = get_plan(db, monday)
     if not plan: return None
     shopping = db.scalar(select(ShoppingList).where(ShoppingList.monday == monday))
-    if shopping is None: shopping = ShoppingList(monday=monday); db.add(shopping); db.flush()
-    else: shopping.items.clear(); db.flush()
+    manual_items = []
+    if shopping is None:
+        shopping = ShoppingList(monday=monday)
+        db.add(shopping)
+        db.flush()
+    else:
+        manual_items = [
+            ShoppingListItem(
+                name=item.name,
+                quantity=item.quantity,
+                unit=item.unit,
+                category=item.category,
+                checked=item.checked,
+                source="manual",
+            )
+            for item in shopping.items
+            if item.source == "manual"
+        ]
+        shopping.items.clear()
+        db.flush()
+    shopping.items.extend(manual_items)
     totals = defaultdict(float); meta = {}
     for entry in plan.entries:
         scale = (entry.servings or entry.recipe.servings) / entry.recipe.servings
@@ -68,8 +87,9 @@ def generate_shopping_list(db, monday):
             meta[key] = ingredient
     for (name, unit), total in sorted(totals.items()):
         source = meta[(name, unit)]
-        shopping.items.append(ShoppingListItem(name=source.name, quantity=total, unit=source.unit, category=source.category))
+        shopping.items.append(ShoppingListItem(name=source.name, quantity=total, unit=source.unit, category=source.category, source="planner"))
     # Keep ingredients without quantities too.
     for (name, unit), source in meta.items():
-        if (name, unit) not in totals: shopping.items.append(ShoppingListItem(name=source.name, unit=source.unit, category=source.category))
+        if (name, unit) not in totals:
+            shopping.items.append(ShoppingListItem(name=source.name, unit=source.unit, category=source.category, source="planner"))
     db.commit(); db.refresh(shopping); return shopping

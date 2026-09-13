@@ -49,3 +49,14 @@ def migrate_meal_plan_entries() -> None:
         connection.execute(text("DROP TABLE meal_plan_entries"))
         connection.execute(text("ALTER TABLE meal_plan_entries_new RENAME TO meal_plan_entries"))
         connection.execute(text("PRAGMA foreign_keys=ON"))
+
+
+def migrate_shopping_list_items() -> None:
+    if not DATABASE_URL.startswith("sqlite"):
+        return
+    with engine.begin() as connection:
+        columns = {column["name"] for column in inspect(connection).get_columns("shopping_list_items")}
+        if columns and "source" not in columns:
+            connection.execute(text(
+                "ALTER TABLE shopping_list_items ADD COLUMN source VARCHAR(20) NOT NULL DEFAULT 'planner'"
+            ))

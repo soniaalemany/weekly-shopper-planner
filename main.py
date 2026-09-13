@@ -7,13 +7,14 @@ from fastapi.responses import FileResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 from crud import *
-from database import Base, engine, get_db, migrate_meal_plan_entries
+from database import Base, engine, get_db, migrate_meal_plan_entries, migrate_shopping_list_items
 from models import Recipe as RecipeModel, ShoppingList as ShoppingListModel, ShoppingListItem as ShoppingListItemModel, UsageHistory as UsageHistoryModel
 from importer import import_external_data, import_markdown_recipes
 from schemas import *
 
 Base.metadata.create_all(bind=engine)
 migrate_meal_plan_entries()
+migrate_shopping_list_items()
 app = FastAPI(title="Weekly Meal Planner API", version="1.0.0")
 origins = [origin.strip() for origin in os.getenv("CORS_ORIGINS", "*").split(",") if origin.strip()]
 app.add_middleware(CORSMiddleware, allow_origins=origins, allow_credentials=origins != ["*"], allow_methods=["*"], allow_headers=["*"])
