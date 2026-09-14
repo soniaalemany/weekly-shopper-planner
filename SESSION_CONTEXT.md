@@ -319,3 +319,27 @@ Priorizar una experiencia móvil sencilla: días apilados verticalmente, edició
   - prueba de integración SQLite para comprobar la conservación de artículos
     manuales durante la regeneración;
   - `git diff --check`.
+
+## Exportación e importación nativa de datos (2026-09-14)
+
+- Se añadió un formato JSON propio y versionado: `weekly-shopper-planner`,
+  versión `1`.
+- `Recipe.external_id` usa un UUID estable para que los menús exportados no
+  dependan de los IDs internos de SQLite.
+- `database.py` migra automáticamente recetas existentes añadiendo y rellenando
+  sus identificadores estables.
+- `GET /api/export` exporta recetas, ingredientes, menús semanales e historial
+  de uso.
+- `POST /api/import` reconoce el formato nativo además del formato externo
+  anterior. La importación nativa actualiza recetas por UUID, reutiliza recetas
+  existentes por nombre cuando es necesario y evita duplicar menús e historial.
+- `/recipes.html` incluye el botón `Exportar datos`, que descarga un archivo
+  `weekly-shopper-planner-YYYY-MM-DD.json`.
+- Se mantiene la compatibilidad con la importación JSON externa y Markdown.
+- Validaciones realizadas:
+  - `python3 -m py_compile models.py database.py importer.py main.py`;
+  - `node --check recipes.js`;
+  - migración de una base SQLite antigua;
+  - exportación, importación e importación repetida sin duplicados;
+  - comprobación de los endpoints FastAPI `/api/export` y `/api/import`;
+  - `git diff --check`.

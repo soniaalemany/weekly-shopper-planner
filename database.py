@@ -60,3 +60,21 @@ def migrate_shopping_list_items() -> None:
             connection.execute(text(
                 "ALTER TABLE shopping_list_items ADD COLUMN source VARCHAR(20) NOT NULL DEFAULT 'planner'"
             ))
+
+
+def migrate_recipe_external_ids() -> None:
+    if not DATABASE_URL.startswith("sqlite"):
+        return
+    with engine.begin() as connection:
+        columns = {column["name"] for column in inspect(connection).get_columns("recipes")}
+        if not columns or "external_id" in columns:
+            return
+        connection.execute(text("ALTER TABLE recipes ADD COLUMN external_id VARCHAR(36)"))
+        connection.execute(text("CREATE UNIQUE INDEX ix_recipes_external_id ON recipes (external_id)"))
+        rows = connection.execute(text("SELECT id FROM recipes WHERE external_id IS NULL")).fetchall()
+        from uuid import uuid4
+        for (recipe_id,) in rows:
+            connection.execute(
+                text("UPDATE recipes SET external_id = :external_id WHERE id = :recipe_id"),
+                {"external_id": str(uuid4()), "recipe_id": recipe_id},
+            )

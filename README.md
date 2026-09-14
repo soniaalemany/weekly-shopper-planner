@@ -21,6 +21,8 @@ Todo el código de este proyecto ha sido generado con GitHub Copilot.
 - Generar una lista de la compra a partir del menú semanal.
 - Importar un catálogo y su histórico desde un archivo JSON, o recetas con
   ingredientes y cantidades desde Markdown, en la sección **Recetas**.
+- Exportar recetas, ingredientes, menús semanales e historial a un JSON
+  versionado que se puede importar en otra instalación.
 - Persistir los datos en SQLite.
 
 ## Requisitos
@@ -89,6 +91,12 @@ archivo no duplica planes ni usos.
 También puedes seleccionar un Markdown con recetas en formato `## Nombre` y
 líneas `- Ingrediente: cantidad unidad`. Las recetas se actualizan por nombre,
 incluidos sus ingredientes y cantidades.
+
+En **Recetas**, **Exportar datos** descarga un JSON propio con el formato
+`weekly-shopper-planner`, versión 1. Sus referencias usan identificadores
+estables, por lo que el archivo se puede reimportar sin depender de los IDs
+internos de SQLite. La importación actualiza recetas y menús existentes y es
+idempotente.
 
 ## Estructura
 

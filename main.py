@@ -7,14 +7,15 @@ from fastapi.responses import FileResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 from crud import *
-from database import Base, engine, get_db, migrate_meal_plan_entries, migrate_shopping_list_items
+from database import Base, engine, get_db, migrate_meal_plan_entries, migrate_recipe_external_ids, migrate_shopping_list_items
 from models import Recipe as RecipeModel, ShoppingList as ShoppingListModel, ShoppingListItem as ShoppingListItemModel, UsageHistory as UsageHistoryModel
-from importer import import_external_data, import_markdown_recipes
+from importer import export_data, import_external_data, import_markdown_recipes, import_native_data
 from schemas import *
 
 Base.metadata.create_all(bind=engine)
 migrate_meal_plan_entries()
 migrate_shopping_list_items()
+migrate_recipe_external_ids()
 app = FastAPI(title="Weekly Meal Planner API", version="1.0.0")
 origins = [origin.strip() for origin in os.getenv("CORS_ORIGINS", "*").split(",") if origin.strip()]
 app.add_middleware(CORSMiddleware, allow_origins=origins, allow_credentials=origins != ["*"], allow_methods=["*"], allow_headers=["*"])
@@ -25,10 +26,16 @@ def health(): return {"status": "ok"}
 @app.post("/api/import")
 def import_data(payload: dict, db: Session = Depends(get_db)):
     try:
+        if payload.get("format") == "weekly-shopper-planner":
+            return import_native_data(db, payload)
         return import_external_data(db, payload)
     except Exception:
         db.rollback()
         raise
+
+@app.get("/api/export")
+def export_data_endpoint(db: Session = Depends(get_db)):
+    return export_data(db)
 
 @app.post("/api/import-markdown")
 def import_markdown(payload: dict, db: Session = Depends(get_db)):

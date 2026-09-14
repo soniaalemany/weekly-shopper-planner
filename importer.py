@@ -3,11 +3,13 @@ import re
 from typing import Any
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 from models import MealPlanEntry, Recipe, RecipeIngredient, UsageHistory, WeeklyMealPlan
 
 
 WEEK_INDEX_EPOCH = date(1970, 1, 5)
+NATIVE_FORMAT = "weekly-shopper-planner"
+NATIVE_VERSION = 1
 
 _QUANTITY_RE = re.compile(
     r"(?P<quantity>\d+(?:[.,]\d+)?)(?:\s*[-–]\s*\d+(?:[.,]\d+)?)?"
@@ -224,6 +226,190 @@ def import_external_data(db: Session, payload: dict[str, Any]) -> dict[str, int]
     return {
         "recipes": len(recipes),
         "new_recipes": imported_recipes,
+        "ingredients": imported_ingredients,
+        "plans": imported_plans,
+        "usages": imported_usages,
+    }
+
+
+def _iso(value: date | datetime | None) -> str | None:
+    return value.isoformat() if value else None
+
+
+def export_data(db: Session) -> dict[str, Any]:
+    recipes = list(
+        db.query(Recipe)
+        .options(selectinload(Recipe.ingredients))
+        .order_by(Recipe.name)
+        .all()
+    )
+    recipe_data = [
+        {
+            "id": recipe.external_id,
+            "name": recipe.name,
+            "description": recipe.description,
+            "instructions": recipe.instructions,
+            "servings": recipe.servings,
+            "prep_minutes": recipe.prep_minutes,
+            "ingredients": [
+                {
+                    "name": ingredient.name,
+                    "quantity": ingredient.quantity,
+                    "unit": ingredient.unit,
+                    "category": ingredient.category,
+                }
+                for ingredient in recipe.ingredients
+            ],
+        }
+        for recipe in recipes
+    ]
+    plans = list(
+        db.query(WeeklyMealPlan)
+        .options(selectinload(WeeklyMealPlan.entries).selectinload(MealPlanEntry.recipe))
+        .order_by(WeeklyMealPlan.monday)
+        .all()
+    )
+    plan_data = [
+        {
+            "monday": _iso(plan.monday),
+            "entries": [
+                {
+                    "day_of_week": entry.day_of_week,
+                    "meal_type": entry.meal_type,
+                    "position": entry.position,
+                    "recipe_id": entry.recipe.external_id,
+                    "servings": entry.servings,
+                }
+                for entry in sorted(plan.entries, key=lambda item: (item.day_of_week, item.meal_type, item.position))
+            ],
+        }
+        for plan in plans
+    ]
+    usages = list(db.query(UsageHistory).order_by(UsageHistory.used_at).all())
+    usage_data = [
+        {
+            "recipe_id": usage.recipe.external_id if usage.recipe else None,
+            "monday": _iso(usage.monday),
+            "meal_type": usage.meal_type,
+            "used_at": _iso(usage.used_at),
+        }
+        for usage in usages
+        if usage.recipe is not None
+    ]
+    return {
+        "format": NATIVE_FORMAT,
+        "version": NATIVE_VERSION,
+        "exported_at": datetime.utcnow().isoformat() + "Z",
+        "recipes": recipe_data,
+        "meal_plans": plan_data,
+        "usage_history": usage_data,
+    }
+
+
+def import_native_data(db: Session, payload: dict[str, Any]) -> dict[str, int]:
+    if payload.get("version") != NATIVE_VERSION:
+        raise ValueError(f"Unsupported export version: {payload.get('version')}")
+    source_recipes = payload.get("recipes")
+    source_plans = payload.get("meal_plans", [])
+    source_usages = payload.get("usage_history", [])
+    if not isinstance(source_recipes, list) or not isinstance(source_plans, list) or not isinstance(source_usages, list):
+        raise ValueError("Invalid export structure")
+
+    recipes_by_external_id: dict[str, Recipe] = {}
+    created_recipes = updated_recipes = imported_ingredients = 0
+    for source in source_recipes:
+        if not isinstance(source, dict) or not _text(source.get("id")) or not _text(source.get("name")):
+            raise ValueError("Each exported recipe requires id and name")
+        external_id = _text(source["id"])
+        recipe = db.query(Recipe).filter(Recipe.external_id == external_id).first()
+        if recipe is None:
+            recipe = db.query(Recipe).filter(Recipe.name == _text(source["name"])).first()
+        if recipe is None:
+            recipe = Recipe(external_id=external_id, name=_text(source["name"]), servings=4)
+            db.add(recipe)
+            db.flush()
+            created_recipes += 1
+        else:
+            recipe.external_id = external_id
+            updated_recipes += 1
+        for field in ("name", "description", "instructions", "servings", "prep_minutes"):
+            if field in source:
+                setattr(recipe, field, source[field])
+        ingredients = source.get("ingredients", [])
+        if not isinstance(ingredients, list):
+            raise ValueError(f"Invalid ingredients for recipe {external_id}")
+        recipe.ingredients = [
+            RecipeIngredient(
+                name=_text(item.get("name")),
+                quantity=_number(item.get("quantity")),
+                unit=_text(item.get("unit")) or None,
+                category=_text(item.get("category")) or None,
+            )
+            for item in ingredients
+            if isinstance(item, dict) and _text(item.get("name"))
+        ]
+        imported_ingredients += len(recipe.ingredients)
+        recipes_by_external_id[external_id] = recipe
+
+    imported_plans = 0
+    for source in source_plans:
+        if not isinstance(source, dict):
+            raise ValueError("Invalid meal plan")
+        monday = _date(source.get("monday"))
+        if monday is None or monday.weekday() != 0:
+            raise ValueError("Meal plan monday must be a Monday")
+        entries = source.get("entries", [])
+        if not isinstance(entries, list):
+            raise ValueError("Invalid meal plan entries")
+        plan = db.query(WeeklyMealPlan).filter(WeeklyMealPlan.monday == monday).first()
+        if plan is None:
+            plan = WeeklyMealPlan(monday=monday)
+            db.add(plan)
+            db.flush()
+            imported_plans += 1
+        plan.entries.clear()
+        db.flush()
+        for item in entries:
+            if not isinstance(item, dict):
+                raise ValueError("Invalid meal plan entry")
+            recipe = recipes_by_external_id.get(_text(item.get("recipe_id")))
+            if recipe is None:
+                raise ValueError(f"Unknown recipe reference: {item.get('recipe_id')}")
+            plan.entries.append(
+                MealPlanEntry(
+                    day_of_week=int(item["day_of_week"]),
+                    meal_type=_text(item["meal_type"]),
+                    position=int(item.get("position", 0)),
+                    recipe_id=recipe.id,
+                    servings=item.get("servings"),
+                )
+            )
+
+    imported_usages = 0
+    for source in source_usages:
+        if not isinstance(source, dict):
+            raise ValueError("Invalid usage history entry")
+        recipe = recipes_by_external_id.get(_text(source.get("recipe_id")))
+        if recipe is None:
+            raise ValueError(f"Unknown usage recipe reference: {source.get('recipe_id')}")
+        monday = _date(source.get("monday"))
+        used_at = datetime.fromisoformat(source["used_at"].replace("Z", "+00:00")).replace(tzinfo=None) if source.get("used_at") else datetime.now()
+        exists = db.scalar(
+            select(UsageHistory.id).where(
+                UsageHistory.recipe_id == recipe.id,
+                UsageHistory.monday == monday,
+                UsageHistory.meal_type == source.get("meal_type"),
+                UsageHistory.used_at == used_at,
+            )
+        )
+        if exists is None:
+            db.add(UsageHistory(recipe_id=recipe.id, monday=monday, meal_type=source.get("meal_type"), used_at=used_at))
+            imported_usages += 1
+    db.commit()
+    return {
+        "recipes": len(source_recipes),
+        "new_recipes": created_recipes,
+        "updated_recipes": updated_recipes,
         "ingredients": imported_ingredients,
         "plans": imported_plans,
         "usages": imported_usages,
